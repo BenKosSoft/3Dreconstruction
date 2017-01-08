@@ -1,5 +1,5 @@
 clear all; close all;
-
+%{
 L = 300; %image size
 I1 = zeros(L,L);
 
@@ -59,7 +59,7 @@ figure,subplot(1,2,1), imshow(I1, []), title('View 1');
 
 
 ax = 0 * DEG_TO_RAD;
-ay = -25 *DEG_TO_RAD;
+ay = 0 *DEG_TO_RAD;
 az = 0 * DEG_TO_RAD;
 
 Rx = [1 0 0;
@@ -74,7 +74,7 @@ Rz = [cos(az) -sin(az) 0;
 
 Rc2c1 = Rx*Ry*Rz;
 
-Tc2c1 = [3;0;1];
+Tc2c1 = [9;0;0];
 Hc1 = [Rc1 Tc1; 0 0 0 1];
 Hc2c1 = [Rc2c1 Tc2c1; 0 0 0 1];
 Hc2 = Hc2c1*Hc1;
@@ -114,8 +114,29 @@ subplot(1,2,2), imshow(I2, []), title('View 2');
 
 t = Tc2c1;
 Etrue = [0 -t(3) t(2); t(3) 0 -t(1); -t(2) t(1) 0]*Rc2c1;
+%}
 
-%%
+%% points and intrinsic params
+DEG_TO_RAD = pi/180;
+
+u1 = [385, 347, 349, 196, 171, 262, 352, 557;
+      642, 692, 750, 785, 802, 586, 557, 825;
+      1,   1,   1,   1,   1,   1,   1,   1];
+
+u2 = [753, 722, 721, 582, 535, 659, 696, 644;
+      667, 716, 774, 803, 819, 607, 579, 842;
+      1,   1,   1,   1,   1,   1,   1,   1]; 
+  
+%intrinsic parameters are known (calibrated)
+f=876;
+u0 = 480;
+v0 = 640;
+
+K = [f 0 u0;
+    0 f v0;
+    0 0 1];
+
+%% a
 p1 = inv(K)*u1;
 p2 = inv(K)*u2;
 
@@ -124,7 +145,7 @@ Xa = [];
 % for i=4:1:12
 % for i=3:1:15
 % for i=1:1:10
-for i=1:1:15
+for i=1:1:8
     a = [p1(1,i)*p2(1,i);
         p1(1,i)*p2(2,i);
         p1(1,i)*p2(3,i);
@@ -156,7 +177,7 @@ x2 = p2(:,j);
 l1 = (E')*x2;
 l2 = E*x1;
 
-%%
+%% estimate Rs Ts
 az = 90 * DEG_TO_RAD;
 Rz = [cos(az) -sin(az) 0;
       sin(az) cos(az)  0;
@@ -175,14 +196,15 @@ Rz = [cos(az) -sin(az) 0;
 Th2 = U*Rz*S*U';
 T2 = [-Th2(2,3); Th2(1,3); -Th2(1,2)];
 R2 = U*Rz'*V';
-%%
+%% 3d reoons
+%{
 R = R1;
 T = T1;
 MU = zeros(45,16);
 
 j = 1;
 
-for i=1:1:15
+for i=1:1:8
     x1 = p1(:,i);
     x2 = p2(:,i);
     x2h = MakeSkewM(x2);%skew symmetric of x2
@@ -197,6 +219,7 @@ Res = V(:,end);
 
 lambdas = Res(1:15);
 
+
 kGamma = Tc2c1(1) / T(1);
 k = kGamma / Res(16);
 
@@ -210,9 +233,9 @@ plot3(p1Est(1,:),p1Est(2,:),p1Est(3,:),'d')
 axis equal
 grid on
 axis vis3d
-
+%}
 %% Error in reconstruction
-
+%{
 %real deistance between farthest points on object
 realDistance = norm(P_W(:,1) - P_W(:,end))
 
@@ -221,4 +244,4 @@ estimatedDistance = norm(p1Est(:,1) - p1Est(:,end))
 
 %difference between them is the error
 error = norm(P_W(:,1) - P_W(:,2)) - norm(p1Est(:,1) - p1Est(:,2))
-
+%}
