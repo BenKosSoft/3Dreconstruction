@@ -1,3 +1,4 @@
+%TODO: update this... or fuck it pick manually
 function [normalizedCorners] = NormalizeCorners(corners, treshold)
 
 normalizedCorners = corners;
@@ -8,9 +9,10 @@ while i<=length(normalizedCorners)
         break;
     end
     removed = 0;
-    index = i+1;
     point = [normalizedCorners(i,1), normalizedCorners(i,2)];
-    for j=1:1:length(normalizedCorners)
+    index = i+1;
+    j=1;
+    while j<=length(normalizedCorners)
         if j > length(normalizedCorners)
             break;
         end
@@ -19,6 +21,8 @@ while i<=length(normalizedCorners)
             normalizedCorners(j,:) = [];
             removed = 1;
             index = j;
+        else
+            j = j+1;
         end
     end
     if ~removed && index>i
