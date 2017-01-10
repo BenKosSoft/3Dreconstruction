@@ -119,18 +119,18 @@ Etrue = [0 -t(3) t(2); t(3) 0 -t(1); -t(2) t(1) 0]*Rc2c1;
 %% points and intrinsic params
 DEG_TO_RAD = pi/180;
 
-u1 = [385, 347, 349, 196, 171, 262, 352, 557;
-      642, 692, 750, 785, 802, 586, 557, 825;
-      1,   1,   1,   1,   1,   1,   1,   1];
-
-u2 = [753, 722, 721, 582, 535, 659, 696, 644;
-      667, 716, 774, 803, 819, 607, 579, 842;
-      1,   1,   1,   1,   1,   1,   1,   1]; 
+u1 = [92,  94,  95,  97, 100, 100, 105, 128, 143, 168, 221, 271, 310, 387, 175, 173, 167, 168;
+      438, 477, 519, 560, 603, 639, 448, 456, 465, 477, 470, 464, 453, 442, 527, 579, 664, 713;
+      1,    1,    1,    1,   1,   1,   1,   1,  1,   1,   1,   1,   1,   1,   1,   1,   1,   1];
+ 
+u2 = [226, 225, 223, 223, 221, 219, 249, 291, 318, 354, 398, 437, 465, 526, 355, 355, 343, 341;
+      450, 487, 529, 571, 612, 650, 460, 470, 479, 487, 487, 482, 472, 464, 539, 594, 680, 730;
+      1,   1,   1,   1,   1,   1,    1,    1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1]; 
   
 %intrinsic parameters are known (calibrated)
-f=876;
-u0 = 480;
-v0 = 640;
+f=876.85162;
+u0 = 384.01067;
+v0 = 371.84479;
 
 K = [f 0 u0;
     0 f v0;
@@ -145,7 +145,7 @@ Xa = [];
 % for i=4:1:12
 % for i=3:1:15
 % for i=1:1:10
-for i=1:1:8
+for i=1:1:18
     a = [p1(1,i)*p2(1,i);
         p1(1,i)*p2(2,i);
         p1(1,i)*p2(3,i);
@@ -178,33 +178,37 @@ l1 = (E')*x2;
 l2 = E*x1;
 
 %% estimate Rs Ts
-az = 90 * DEG_TO_RAD;
-Rz = [cos(az) -sin(az) 0;
-      sin(az) cos(az)  0;
-      0          0     1];
-
-Th1 = U*Rz*S*U';
-T1 = [-Th1(2,3); Th1(1,3); -Th1(1,2)];
-R1 = U*Rz'*V';
-
-
-az = -90 * DEG_TO_RAD;
-Rz = [cos(az) -sin(az) 0;
-      sin(az) cos(az)  0;
-      0          0     1];
-
-Th2 = U*Rz*S*U';
-T2 = [-Th2(2,3); Th2(1,3); -Th2(1,2)];
-R2 = U*Rz'*V';
+% az = 90 * DEG_TO_RAD;
+% Rz = [cos(az) -sin(az) 0;
+%       sin(az) cos(az)  0;
+%       0          0     1];
+% 
+% Th1 = U*Rz*S*U';
+% T1 = [-Th1(2,3); Th1(1,3); -Th1(1,2)];
+% R1 = U*Rz'*V';
+% 
+% 
+% az = -90 * DEG_TO_RAD;
+% Rz = [cos(az) -sin(az) 0;
+%       sin(az) cos(az)  0;
+%       0          0     1];
+% 
+% Th2 = U*Rz*S*U';
+% T2 = [-Th2(2,3); Th2(1,3); -Th2(1,2)];
+% R2 = U*Rz'*V';
 %% 3d reoons
-%{
-R = R1;
-T = T1;
-MU = zeros(45,16);
+
+R = [-0.037113 -0.074803 0.101077;
+    0.006917 0.050042 -0.033277;
+    -0.058937 0.107928 0.069833];
+
+T = [46.313922;4.812478;4.65071];
+
+MU = zeros(54,19);
 
 j = 1;
 
-for i=1:1:8
+for i=1:1:18
     x1 = p1(:,i);
     x2 = p2(:,i);
     x2h = MakeSkewM(x2);%skew symmetric of x2
@@ -217,11 +221,11 @@ end
 [U,S,V] = svd(MU'*MU);
 Res = V(:,end);
 
-lambdas = Res(1:15);
+lambdas = Res(1:18);
 
 
-kGamma = Tc2c1(1) / T(1);
-k = kGamma / Res(16);
+kGamma = 1;
+k = kGamma / Res(19);
 
 lambdaM = [lambdas';lambdas';lambdas'];
 p1Est = k * (p1 .* lambdaM);
@@ -233,7 +237,7 @@ plot3(p1Est(1,:),p1Est(2,:),p1Est(3,:),'d')
 axis equal
 grid on
 axis vis3d
-%}
+
 %% Error in reconstruction
 %{
 %real deistance between farthest points on object
