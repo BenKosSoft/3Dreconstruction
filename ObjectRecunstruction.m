@@ -1,251 +1,225 @@
-clear all; close all;
-%{
-L = 300; %image size
-I1 = zeros(L,L);
+%% Read a Pair of Images
+% Load a pair of images into the workspace.
 
-%intrinsic parameters are known (calibrated)
-f=L;
-u0 = L/2;
-v0 = L/2;
+clear all;close all;
 
-K = [f 0 u0;
-    0 f v0;
-    0 0 1];
+imageDir = fullfile('StereoImages','3'); % 3 examples provided, replace 1 with
+                                         % 2 or 3 for others
+images = imageSet(imageDir);
+I1 = read(images, 1);
+I2 = read(images, 2);
+figure
+imshowpair(I1, I2, 'montage'); 
+title('Original Images');
 
-DEG_TO_RAD = pi/180;
+%% Load Camera Parameters 
 
-P_W = [0 0 0 0 0 0 0 0 0 1 2 1 2 1 2 ;
-       2 1 0 2 1 0 2 1 0 0 0 0 0 0 0 ;
-       0 0 0 -1 -1 -1 -2 -2 -2 0 0 -1 -1 -2 -2 ;
-       1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 ];
-   
-figure;
-plot3(P_W(1,:),P_W(2,:),P_W(3,:),'d');
-axis equal;
+% Load precomputed intrinsic camera parameters using the Camera calibrator
+% app (code for it is in CalibrateCamera.m)
+load calibrationResults.mat
+
+%% Remove Lens Distortion
+% To improve the accuracy of the final reconstruction, we should remove the
+% distortion from each of the images using the undistortImage function
+% provided by the computer vision toolbox.
+
+I1 = undistortImage(I1, cameraParams);
+I2 = undistortImage(I2, cameraParams);
+
+figure 
+imshowpair(I1, I2, 'montage');
+title('Undistorted Images');
+
+% black parts at the edge severely affect the results... Therefore it
+% should be cropped to get rid of them, coordinates are measured statically
+% from one pair, but it seems to fit every pair obtained from the same
+% camera
+
+I1 = imcrop(I1,[85 63 1900 1407]);
+I2 = imcrop(I2,[85 63 1900 1407]);
+
+figure 
+imshowpair(I1, I2, 'montage');
+title('Undistorted Images after cropping black parts');
+%% Find Point Correspondences Between The Images
+% Detect good features to track using Shi-Tomasi feautres. Then we find the
+% correspondig points between two images using Kanade-Lucas-Tomasi
+% algorithm
+
+% Detect feature points (Shi-Tomasi corners)
+imagePoints1 = detectMinEigenFeatures(rgb2gray(I1), 'MinQuality', 0.1);
+
+% Detect SURF features
+% imagePoints1 = detectSURFFeatures(rgb2gray(I1));
+
+% Visualize detected points
+figure
+imshow(I1, 'InitialMagnification', 50);
+title('150 Strongest Corners from the First Image');
+hold on
+plot(selectStrongest(imagePoints1, 150));
+
+% Create the point tracker
+% NumPyramidLevels: in this function KLT algorithm uses image pyramids,
+% where each level is reduced in resolution by factor of 2 compared to
+% previous level. This allows the algorithm to handle larger displacements
+% of points between frames.
+% MaxBidirectionalError: Track the point from previous frame to next then
+% next to previous calculate the error between actual point and calculated
+% one.
+tracker = vision.PointTracker('MaxBidirectionalError', 1, 'NumPyramidLevels', 5);
+
+% Initialize the point tracker
+imagePoints1 = imagePoints1.Location;
+initialize(tracker, imagePoints1, I1);
+
+% Track the points
+[imagePoints2, validIdx] = step(tracker, I2);
+matchedPoints1 = imagePoints1(validIdx, :);
+matchedPoints2 = imagePoints2(validIdx, :);
+
+% Visualize correspondences
+figure
+showMatchedFeatures(I1, I2, matchedPoints1, matchedPoints2);
+title('Tracked Features');
+
+
+%% Estimate the Fundamental Matrix
+% Caluclate fundemental matrix and find the inlier points that meet the
+% epipolar constraint using the estimateFundamentalMatrix function
+
+% Estimate the fundamental matrix
+[fMatrix, epipolarInliers] = estimateFundamentalMatrix(...
+  matchedPoints1, matchedPoints2, 'Method', 'MSAC', 'NumTrials', 10000);
+
+% Find epipolar inliers
+inlierPoints1 = matchedPoints1(epipolarInliers, :);
+inlierPoints2 = matchedPoints2(epipolarInliers, :);
+
+% Display inlier matches
+figure
+showMatchedFeatures(I1, I2, inlierPoints1, inlierPoints2);
+title('Epipolar Inliers');
+
+%% Compute the Camera Pose
+% Compute the rotation and translation between the camera poses
+% corresponding to the two images. Note that |t| is a unit vector,
+% because translation can only be computed up to scale.
+
+[R, t] = cameraPose(fMatrix, cameraParams, inlierPoints1, inlierPoints2);
+
+%% Reconstruct the 3-D Locations of Matched Points
+% Re-detect points in the first image using lower |'MinQuality'| to get
+% more points. Track the new points into the second image. Estimate the 
+% 3-D locations corresponding to the matched points using the |triangulate|
+% function, which implements the Direct Linear Transformation
+% (DLT) algorithm. Place the origin at the optical center of the camera
+% corresponding to the first image.
+
+% Detect dense feature points
+imagePoints1 = detectMinEigenFeatures(rgb2gray(I1), 'MinQuality', 0.001);
+
+% Create the point tracker
+tracker = vision.PointTracker('MaxBidirectionalError', 1, 'NumPyramidLevels', 5);
+
+% Initialize the point tracker
+imagePoints1 = imagePoints1.Location;
+initialize(tracker, imagePoints1, I1);
+
+% Track the points
+[imagePoints2, validIdx] = step(tracker, I2);
+matchedPoints1 = imagePoints1(validIdx, :);
+matchedPoints2 = imagePoints2(validIdx, :);
+
+% Compute the camera matrices for each position of the camera
+% The first camera is at the origin looking along the X-axis. Thus, its
+% rotation matrix is identity, and its translation vector is 0.
+camMatrix1 = cameraMatrix(cameraParams, eye(3), [0 0 0]);
+camMatrix2 = cameraMatrix(cameraParams, R', -t*R');
+
+% Compute the 3-D points (direct linear transformation)
+points3D = triangulate(matchedPoints1, matchedPoints2, camMatrix1, camMatrix2);
+
+% Get the color of each reconstructed point
+numPixels = size(I1, 1) * size(I1, 2);
+allColors = reshape(I1, [numPixels, 3]);
+colorIdx = sub2ind([size(I1, 1), size(I1, 2)], round(matchedPoints1(:,2)), ...
+    round(matchedPoints1(:, 1)));
+color = allColors(colorIdx, :);
+
+% Create the point cloud
+ptCloud = pointCloud(points3D, 'Color', color);
+
+%% Display the 3-D Point Cloud
+% Use the |plotCamera| function to visualize the locations and orientations
+% of the camera, and the |pcshow| function to visualize the point cloud.
+
+% Visualize the camera locations and orientations
+cameraSize = 0.3;
+figure
+plotCamera('Size', cameraSize, 'Color', 'r', 'Label', '1', 'Opacity', 0);
+hold on
 grid on
-axis vis3d;
-   
-NPTS = size(P_W,2);
+plotCamera('Location', t, 'Orientation', R, 'Size', cameraSize, ...
+    'Color', 'b', 'Label', '2', 'Opacity', 0);
 
-ax = 120 * DEG_TO_RAD;
-ay = 0 *DEG_TO_RAD;
-az = 60 * DEG_TO_RAD;
+% Visualize the point cloud
+pcshow(ptCloud, 'VerticalAxis', 'y', 'VerticalAxisDir', 'down', ...
+    'MarkerSize', 45);
 
-Rx = [1 0 0;
-      0 cos(ax) -sin(ax);
-      0 sin(ax) cos(ax)];
-Ry = [cos(ay)  0  sin(ay);
-           0   1     0;
-      -sin(ay) 0  cos(ay)];
-Rz = [cos(az) -sin(az) 0;
-      sin(az) cos(az)  0;
-      0          0     1];
-  
-Rc1 = Rx*Ry*Rz; %rotation of camera 1
-Tc1 = [0;0;5]; %translation of camera 1
-M = [Rc1 Tc1];
+% Rotate and zoom the plot
+camorbit(0, -30);
+camzoom(1.5);
 
-p1 = K*(M * P_W);
+% Label the axes
+xlabel('x-axis');
+ylabel('y-axis');
+zlabel('z-axis')
 
-u1(1,:) = p1(1,:) ./ p1(3,:);
-u1(2,:) = p1(2,:) ./ p1(3,:);
-u1(3,:) = p1(3,:) ./ p1(3,:);
+title('Up to Scale Reconstruction of the Scene');
 
-for i=1:length(u1)
-    x = round(u1(1,i)); y=round(u1(2,i));
-    I1(y-2:y+2, x-2:x+2) = 255;
-end
-figure,subplot(1,2,1), imshow(I1, []), title('View 1');
+%% Fit a Sphere to the Point Cloud to Find the Globe
+% In examples 1 and 2 we know there is a globe (earth) therefore in order
+% to better visulize the 3D shape we are plotting the best fitting globe by
+% using pcfitsphere function, which is again provided by computer vision
+% toolbox. Note: You can comment out this part for 3rd example
 
+% Detect the globe
+globe = pcfitsphere(ptCloud, 0.1);
 
-ax = 0 * DEG_TO_RAD;
-ay = 0 *DEG_TO_RAD;
-az = 0 * DEG_TO_RAD;
+% Display the surface of the globe
+plot(globe);
+title('Estimated Location and Size of the Globe');
+hold off
 
-Rx = [1 0 0;
-      0 cos(ax) -sin(ax);
-      0 sin(ax) cos(ax)];
-Ry = [cos(ay)  0  sin(ay);
-           0   1     0;
-      -sin(ay) 0  cos(ay)];
-Rz = [cos(az) -sin(az) 0;
-      sin(az) cos(az)  0;
-      0          0     1];
+%% Metric Reconstruction of the Scene
+% The actual radius of the globe is 5cm. We can now determine the
+% coordinates of the 3-D points in centimeters.
 
-Rc2c1 = Rx*Ry*Rz;
+% Determine the scale factor
+scaleFactor = 5 / globe.Radius;
 
-Tc2c1 = [9;0;0];
-Hc1 = [Rc1 Tc1; 0 0 0 1];
-Hc2c1 = [Rc2c1 Tc2c1; 0 0 0 1];
-Hc2 = Hc2c1*Hc1;
+% Scale the point cloud
+ptCloud = pointCloud(points3D * scaleFactor, 'Color', color);
+t = t * scaleFactor;
 
-Rc2 = Hc2(1:3,1:3);
-Tc2 = Hc2(1:3,4);
-
-M = [Rc2 Tc2];
-
-I2 = zeros(L,L);
-p2 = K*(M*P_W);
-
-% Rand = rand(3,15);
-% Rand = Rand./100;
-% Rand(3,:) = 0;
-% 
-% p2=p2+Rand;
-
-u2(1,:) = p2(1,:) ./ p2(3,:);
-u2(2,:) = p2(2,:) ./ p2(3,:);
-u2(3,:) = p2(3,:) ./ p2(3,:);
-
-for i=1:length(u2)
-    x = round(u2(1,i)); y=round(u2(2,i));
-    I2(y-2:y+2, x-2:x+2) = 255;
-end
-
-subplot(1,2,2), imshow(I2, []), title('View 2');
-
-% disp('Points in image 1:');
-% disp(u1);
-% disp('Points in image 2:');
-% disp(u2);
-
-% imwrite(I1,'I1.tif');
-% imwrite(I2,'I2.tif');
-
-t = Tc2c1;
-Etrue = [0 -t(3) t(2); t(3) 0 -t(1); -t(2) t(1) 0]*Rc2c1;
-%}
-
-%% points and intrinsic params
-DEG_TO_RAD = pi/180;
-
-u1 = [92,  94,  95,  97, 100, 100, 105, 128, 143, 168, 221, 271, 310, 387, 175, 173, 167, 168;
-      438, 477, 519, 560, 603, 639, 448, 456, 465, 477, 470, 464, 453, 442, 527, 579, 664, 713;
-      1,    1,    1,    1,   1,   1,   1,   1,  1,   1,   1,   1,   1,   1,   1,   1,   1,   1];
- 
-u2 = [226, 225, 223, 223, 221, 219, 249, 291, 318, 354, 398, 437, 465, 526, 355, 355, 343, 341;
-      450, 487, 529, 571, 612, 650, 460, 470, 479, 487, 487, 482, 472, 464, 539, 594, 680, 730;
-      1,   1,   1,   1,   1,   1,    1,    1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1]; 
-  
-%intrinsic parameters are known (calibrated)
-f=876.85162;
-u0 = 384.01067;
-v0 = 371.84479;
-
-K = [f 0 u0;
-    0 f v0;
-    0 0 1];
-
-%% a
-p1 = inv(K)*u1;
-p2 = inv(K)*u2;
-
-Xa = [];
-% for i=1:1:8
-% for i=4:1:12
-% for i=3:1:15
-% for i=1:1:10
-for i=1:1:18
-    a = [p1(1,i)*p2(1,i);
-        p1(1,i)*p2(2,i);
-        p1(1,i)*p2(3,i);
-        p1(2,i)*p2(1,i);
-        p1(2,i)*p2(2,i);
-        p1(2,i)*p2(3,i);
-        p1(3,i)*p2(1,i);
-        p1(3,i)*p2(2,i);
-        p1(3,i)*p2(3,i)];
-    Xa = [Xa; a'];
-end
-XaTXa = (Xa')*Xa;
-[U,S,V] = svd(XaTXa);
-Es = V(:,end);
-E = [Es(1:3) Es(4:6) Es(7:9)];
-[U,S,V] = svd(E);
-S(1,1) = 1;
-S(2,2) = 1;
-S(3,3) = 0;
-E = U*S*V';
-%% Epipoles
-e1 = null(E,'r'); %right null space
-e2 = null(E','r'); %left null space
-%% Epipolar Lines
-j=1;
-x1 = p1(:,j);
-x2 = p2(:,j);
-
-l1 = (E')*x2;
-l2 = E*x1;
-
-%% estimate Rs Ts
-% az = 90 * DEG_TO_RAD;
-% Rz = [cos(az) -sin(az) 0;
-%       sin(az) cos(az)  0;
-%       0          0     1];
-% 
-% Th1 = U*Rz*S*U';
-% T1 = [-Th1(2,3); Th1(1,3); -Th1(1,2)];
-% R1 = U*Rz'*V';
-% 
-% 
-% az = -90 * DEG_TO_RAD;
-% Rz = [cos(az) -sin(az) 0;
-%       sin(az) cos(az)  0;
-%       0          0     1];
-% 
-% Th2 = U*Rz*S*U';
-% T2 = [-Th2(2,3); Th2(1,3); -Th2(1,2)];
-% R2 = U*Rz'*V';
-%% 3d reoons
-
-R = [-0.037113 -0.074803 0.101077;
-    0.006917 0.050042 -0.033277;
-    -0.058937 0.107928 0.069833];
-
-T = [46.313922;4.812478;4.65071];
-
-MU = zeros(54,19);
-
-j = 1;
-
-for i=1:1:18
-    x1 = p1(:,i);
-    x2 = p2(:,i);
-    x2h = MakeSkewM(x2);%skew symmetric of x2
-    MU(j:j+2,i) = x2h*R*x1;
-    MU(j:j+2,end) = x2h*T;
-    
-    j = j + 3;
-end
-
-[U,S,V] = svd(MU'*MU);
-Res = V(:,end);
-
-lambdas = Res(1:18);
-
-
-kGamma = 1;
-k = kGamma / Res(19);
-
-lambdaM = [lambdas';lambdas';lambdas'];
-p1Est = k * (p1 .* lambdaM);
-
-% close all
-figure;
-
-plot3(p1Est(1,:),p1Est(2,:),p1Est(3,:),'d')
-axis equal
+% Visualize the point cloud in centimeters
+cameraSize = 2; 
+figure
+plotCamera('Size', cameraSize, 'Color', 'r', 'Label', '1', 'Opacity', 0);
+hold on
 grid on
-axis vis3d
+plotCamera('Location', t, 'Orientation', R, 'Size', cameraSize, ...
+    'Color', 'b', 'Label', '2', 'Opacity', 0);
 
-%% Error in reconstruction
-%{
-%real deistance between farthest points on object
-realDistance = norm(P_W(:,1) - P_W(:,end))
+% Visualize the point cloud
+pcshow(ptCloud, 'VerticalAxis', 'y', 'VerticalAxisDir', 'down', ...
+    'MarkerSize', 45);
+camorbit(0, -30);
+camzoom(1.5);
 
-%estimated distance between farthest points on the reconstructed object
-estimatedDistance = norm(p1Est(:,1) - p1Est(:,end))
-
-%difference between them is the error
-error = norm(P_W(:,1) - P_W(:,2)) - norm(p1Est(:,1) - p1Est(:,2))
-%}
+% Label the axes
+xlabel('x-axis (cm)');
+ylabel('y-axis (cm)');
+zlabel('z-axis (cm)')
+title('Metric Reconstruction of the Scene');

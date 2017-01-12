@@ -1,2 +1,1 @@
-- some bugs in normalize
-- Better idea: find corners in 1 image, find correspondances in other (lab7)
+- Mostly Finished... (Feels good...)
