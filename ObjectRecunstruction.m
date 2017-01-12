@@ -1,9 +1,17 @@
+%% Info
+%{
+owners: mertkosan (Mert Kosan), mbenlioglu(Muhammed Mucahid Benlioglu)
+created date: 10.01.2017
+
+3D reconstruction of points from 2 views
+%}
+
 %% Read a Pair of Images
 % Load a pair of images into the workspace.
 
 clear all;close all;
 
-imageDir = fullfile('StereoImages','3'); % 3 examples provided, replace 1 with
+imageDir = fullfile('StereoImages','1'); % 3 examples provided, replace 1 with
                                          % 2 or 3 for others
 images = imageSet(imageDir);
 I1 = read(images, 1);
