@@ -11,7 +11,7 @@ created date: 10.01.2017
 
 clear all;close all;
 
-imageDir = fullfile('StereoImages','1'); % 3 examples provided, replace 1 with
+imageDir = fullfile('StereoImages','3'); % 3 examples provided, replace 1 with
                                          % 2 or 3 for others
 images = imageSet(imageDir);
 I1 = read(images, 1);
@@ -56,9 +56,6 @@ title('Undistorted Images after cropping black parts');
 
 % Detect feature points (Shi-Tomasi corners)
 imagePoints1 = detectMinEigenFeatures(rgb2gray(I1), 'MinQuality', 0.1);
-
-% Detect SURF features
-% imagePoints1 = detectSURFFeatures(rgb2gray(I1));
 
 % Visualize detected points
 figure
@@ -190,7 +187,8 @@ title('Up to Scale Reconstruction of the Scene');
 % In examples 1 and 2 we know there is a globe (earth) therefore in order
 % to better visulize the 3D shape we are plotting the best fitting globe by
 % using pcfitsphere function, which is again provided by computer vision
-% toolbox. Note: You can comment out this part for 3rd example
+% toolbox. Note: 3rd example does not contain any globe features, therefore
+% resulting globe is irrelevant in that example...
 
 % Detect the globe
 globe = pcfitsphere(ptCloud, 0.1);
