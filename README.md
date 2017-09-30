@@ -7,7 +7,7 @@ MATLAB implementation for 3D Object reconstruction, including example input and 
 * @mbenlioglu
 * @mertkosan
 
-## About
+## **About**
 
 In this project the focus was to estimate the 3D locations of objects using two stereo images. 
 
@@ -25,9 +25,11 @@ corresponding features in pair of stereo images with a calibrated camera.
 #### _System architecture followed for the project:_
 ![System Architecture Img](/docs/img/SysArch.png)
 
-For further information refer to [final report of the project](/docs/report/FinalReport.pdf)
+_**For further information refer to [final report of the project](/docs/report/FinalReport.pdf)**_
 
-## Getting Started
+-----------------------
+
+## **Getting Started**
 There are two parts to this project: _Calibration Step_ & _Object Reconstruction Step_
 
 _**1. Calibration Step:**_
