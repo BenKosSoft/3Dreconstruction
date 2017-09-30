@@ -30,13 +30,14 @@ For further information refer to [final report of the project](/docs/report/Fina
 ## Getting Started
 There are two parts to this project: _Calibration Step_ & _Object Reconstruction Step_
 
-1. **Calibration Step:**
-	In this step the camera that will be used for the experiment should be calibrated (to accurately
-	remove camera distortion) by using a calibration rig by taking ~15-20 images of this rig from 
-	different angles.
+_**1. Calibration Step:**_
+
+In this step the camera that will be used for the experiment should be calibrated (to accurately
+remove camera distortion) by using a calibration rig by taking ~15-20 images of this rig from 
+different angles.
 	
-	Input images from the camera that will be used in experiment can be provided by changing the **lines 11-24**
-	in  _"CalibrateCamera.m"_, which are:
+Input images from the camera that will be used in experiment can be provided by changing the **lines 11-24**
+in  _"CalibrateCamera.m"_, which are:
 ```matlab
 imageFileNames = {'CalibrationImages/2/20170110_233339.jpg',...
     'CalibrationImages/2/20170110_233343.jpg',...
@@ -53,27 +54,35 @@ imageFileNames = {'CalibrationImages/2/20170110_233339.jpg',...
     'CalibrationImages/2/20170110_233424.jpg',...
     };
 ```
-    Provided lines of code takes images provided in this repository which are calibration images used
-	to create this project.
+Provided lines of code takes images provided in this repository which are calibration images used
+to create this project.
 
-    Furthermore, square size of the calibration rig at the **line 31** of _"CalibrateCamera.m"_ should
-	also be updated, which is:
+Furthermore, square size of the calibration rig at the **line 31** of _"CalibrateCamera.m"_ should
+also be updated, which is:
 ```matlab
 squareSize = 10;  % in units of 'mm'
 ```
-	Running the script after these adjustments should successfully calibrate your camera.
+Running the script after these adjustments should successfully calibrate your camera.
     
-2. **Object Reconstruction Step:**
-	* In this step _"ObjectReconstruction.m"_ uses two stereo images and camera calibration results to
-	create the reconstructed environment. 
-	Each stereo image set should be under their own folder and this folder is provided to the code.
-	A different set can be provided by changing the path provided in **line 14**. Example stereo images
-	are under _"./StereoImages/"_
+_**2. Object Reconstruction Step:**_
 	
-	* Camera calibration results are by default loaded from _"./calibrationResults.mat"_. You can provide
-	your calibration results either by saving your results under this name or modifying the **line 27** of
-	the code
-
-	After making needed changes code should reconstruct the environment from the provided stereo images.
-	Example outputs can be found under _"./OutputImages/"_
+* In this step _"ObjectReconstruction.m"_ uses two stereo images and camera calibration results to
+create the reconstructed environment. 
+Each stereo image set should be under their own folder and this folder is provided to the code.
+A different set can be provided by changing the path provided in **line 14**. Example stereo images
+are under _"./StereoImages/"_
+```matlab
+imageDir = fullfile('StereoImages','3'); % 3 examples provided, replace 1 with
+                                         % 2 or 3 for others
+```	
+* Camera calibration results are by default loaded from _"./calibrationResults.mat"_. You can provide
+your calibration results either by saving your results under this name or modifying the **line 27** of
+the code
+```matlab
+% Load precomputed intrinsic camera parameters using the Camera calibrator
+% app (code for it is in CalibrateCamera.m)
+load calibrationResults.mat
+```
+After making needed changes code should reconstruct the environment from the provided stereo images.
+Example outputs can be found under _"./OutputImages/"_
  
