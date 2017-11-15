@@ -3,9 +3,8 @@
 MATLAB implementation for 3D Object reconstruction, including example input and outputs
 
 **Implemented by:**
-
-* @mbenlioglu
-* @mertkosan
+ * [M.Mucahid Benlioglu](https://github.com/mbenlioglu)
+ * [Mert Kosan](https://github.com/mertkosan)
 
 ## **About**
 
